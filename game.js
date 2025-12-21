@@ -1,4 +1,5 @@
 import { FISH_TYPES, MAX_DROP_LEVEL, GAME_WIDTH, GAME_HEIGHT, WALL_THICKNESS, DEADLINE_Y } from './constants.js';
+import { AudioManager } from './audio.js';
 
 // --- Matter.js Aliases ---
 const Engine = Matter.Engine,
@@ -12,6 +13,7 @@ const Engine = Matter.Engine,
 
 // --- Game Variables ---
 let engine, render, runner;
+let audioManager;
 let currentFish = null;
 let nextFishLevel = 1;
 let isDropping = false;
@@ -24,6 +26,9 @@ let gameContainer = document.getElementById('game-container');
 function init() {
     // Update Best Score UI
     document.getElementById('best-score').innerText = bestScore;
+
+    // Setup Audio
+    audioManager = new AudioManager();
 
     // Setup Engine
     engine = Engine.create();
@@ -146,6 +151,7 @@ function handleInputDrop(e) {
     e.preventDefault(); // Prevent double firing on some devices
 
     isDropping = true;
+    audioManager.playDrop();
     
     // Make dynamic
     Body.setStatic(currentFish, false);
@@ -201,6 +207,7 @@ function handleCollisions(event) {
 
             // Create new fish (Level + 1)
             const newLevel = level + 1;
+            audioManager.playMerge(newLevel);
             const newFishType = FISH_TYPES[newLevel - 1];
             
             // 進化後の魚のレンダリング設定
