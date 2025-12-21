@@ -64,4 +64,35 @@ export class AudioManager {
         osc.start(t);
         osc.stop(t + 0.15);
     }
+
+    // クジラ完成時のファンファーレ
+    playFanfare() {
+        this.resume();
+        const t = this.ctx.currentTime;
+        
+        // C Major Fanfare: C4, E4, G4, C5
+        const notes = [261.63, 329.63, 392.00, 523.25];
+        
+        notes.forEach((freq, index) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(this.masterGain);
+            
+            osc.type = 'triangle'; // 明るい音色
+            osc.frequency.value = freq;
+            
+            // タイミング: タ・タ・タ・ターン
+            let startTime = t + index * 0.12;
+            let duration = (index === notes.length - 1) ? 0.8 : 0.1;
+
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.4, startTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+            
+            osc.start(startTime);
+            osc.stop(startTime + duration);
+        });
+    }
 }

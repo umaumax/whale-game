@@ -17,10 +17,12 @@ let audioManager;
 let currentFish = null;
 let nextFishLevel = 1;
 let isDropping = false;
+let lastDropX = GAME_WIDTH / 2;
 let score = 0;
 let bestScore = localStorage.getItem('shusseuo_best') || 0;
 let gameOver = false;
 let gameContainer = document.getElementById('game-container');
+let confettiParticles = []; // 紙吹雪用配列
 
 // --- Initialization ---
 async function init() {
@@ -71,6 +73,7 @@ async function init() {
     // Custom Rendering for Text
     Events.on(render, 'afterRender', renderFishLabels);
     Events.on(render, 'afterRender', renderDeadline);
+    Events.on(render, 'afterRender', renderConfetti); // 紙吹雪の描画
 
     // Start
     Render.run(render);
@@ -136,8 +139,13 @@ function spawnCurrentFish() {
         }
     } : { fillStyle: fishType.color };
 
+    // 前回のドロップ位置を使用（壁へのめり込み防止）
+    let spawnX = lastDropX;
+    if (spawnX < fishType.radius) spawnX = fishType.radius;
+    if (spawnX > GAME_WIDTH - fishType.radius) spawnX = GAME_WIDTH - fishType.radius;
+
     // Create a sensor body (static-ish) for positioning
-    currentFish = Bodies.circle(GAME_WIDTH / 2, 50, fishType.radius, {
+    currentFish = Bodies.circle(spawnX, 50, fishType.radius, {
         isStatic: true,
         label: 'current_fish',
         render: renderConfig,
@@ -178,6 +186,7 @@ function handleInputDrop(e) {
     e.preventDefault(); // Prevent double firing on some devices
 
     isDropping = true;
+    lastDropX = currentFish.position.x;
     audioManager.playDrop();
     
     // Make dynamic
@@ -234,7 +243,13 @@ function handleCollisions(event) {
 
             // Create new fish (Level + 1)
             const newLevel = level + 1;
-            audioManager.playMerge(newLevel);
+            
+            if (newLevel === FISH_TYPES.length) { // クジラ(レベル11)の場合
+                audioManager.playFanfare();
+                triggerConfetti(midX, midY);
+            } else {
+                audioManager.playMerge(newLevel);
+            }
             const newFishType = FISH_TYPES[newLevel - 1];
             
             // 進化後の魚のレンダリング設定
@@ -349,6 +364,51 @@ function renderDeadline() {
     ctx.setLineDash([5, 5]);
     ctx.stroke();
     ctx.setLineDash([]);
+}
+
+// --- Confetti Effect ---
+function triggerConfetti(x, y) {
+    for (let i = 0; i < 100; i++) {
+        confettiParticles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 15,
+            vy: (Math.random() - 1) * 15 - 5, // 上方向に吹き出す
+            color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+            size: Math.random() * 8 + 4,
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 0.3,
+            life: 1.0
+        });
+    }
+}
+
+function renderConfetti() {
+    const ctx = render.context;
+    for (let i = confettiParticles.length - 1; i >= 0; i--) {
+        let p = confettiParticles[i];
+        
+        // Update
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.5; // 重力
+        p.rotation += p.rotationSpeed;
+        p.life -= 0.015; // 寿命を減らす
+        
+        if (p.life <= 0 || p.y > GAME_HEIGHT) {
+            confettiParticles.splice(i, 1);
+            continue;
+        }
+        
+        // Draw
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        ctx.restore();
+    }
 }
 
 // Start Game
