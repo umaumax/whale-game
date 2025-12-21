@@ -119,10 +119,21 @@ function setNextFish() {
     nextFishLevel = getRandomDropLevel();
     const fishType = FISH_TYPES[nextFishLevel - 1];
     const nextCircle = document.getElementById('next-fish-circle');
-    nextCircle.style.backgroundColor = fishType.color;
-    nextCircle.innerText = fishType.name;
-    // Adjust text color for visibility
-    nextCircle.style.color = (nextFishLevel === 9) ? 'white' : '#333'; 
+
+    if (fishType.image) {
+        nextCircle.style.backgroundColor = 'transparent';
+        nextCircle.innerText = '';
+        nextCircle.style.backgroundImage = `url(${fishType.image})`;
+        nextCircle.style.backgroundSize = 'contain';
+        nextCircle.style.backgroundRepeat = 'no-repeat';
+        nextCircle.style.backgroundPosition = 'center';
+    } else {
+        nextCircle.style.backgroundImage = 'none';
+        nextCircle.style.backgroundColor = fishType.color;
+        nextCircle.innerText = fishType.name;
+        // Adjust text color for visibility
+        nextCircle.style.color = (nextFishLevel === 9) ? 'white' : '#333'; 
+    }
 }
 
 function spawnCurrentFish() {
