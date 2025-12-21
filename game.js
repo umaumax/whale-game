@@ -95,11 +95,20 @@ function spawnCurrentFish() {
 
     const fishType = FISH_TYPES[nextFishLevel - 1];
     
+    // 画像設定がある場合はスプライトを使用、なければ色を使用
+    const renderConfig = fishType.image ? {
+        sprite: {
+            texture: fishType.image,
+            xScale: (fishType.radius * 2) / 100, // 画像が100pxの場合のスケール計算
+            yScale: (fishType.radius * 2) / 100
+        }
+    } : { fillStyle: fishType.color };
+
     // Create a sensor body (static-ish) for positioning
     currentFish = Bodies.circle(GAME_WIDTH / 2, 50, fishType.radius, {
         isStatic: true,
         label: 'current_fish',
-        render: { fillStyle: fishType.color },
+        render: renderConfig,
         collisionFilter: { group: -1 } // Don't collide yet
     });
     
@@ -194,9 +203,18 @@ function handleCollisions(event) {
             const newLevel = level + 1;
             const newFishType = FISH_TYPES[newLevel - 1];
             
+            // 進化後の魚のレンダリング設定
+            const renderConfig = newFishType.image ? {
+                sprite: {
+                    texture: newFishType.image,
+                    xScale: (newFishType.radius * 2) / 100,
+                    yScale: (newFishType.radius * 2) / 100
+                }
+            } : { fillStyle: newFishType.color };
+
             const newBody = Bodies.circle(midX, midY, newFishType.radius, {
                 label: 'fish',
-                render: { fillStyle: newFishType.color },
+                render: renderConfig,
                 restitution: 0.2,
                 friction: 0.5
             });
@@ -275,12 +293,14 @@ function renderFishLabels() {
             // Simple text drawing
             ctx.fillText(fish.name, body.position.x, body.position.y);
             
-            // Draw face (simple eyes)
-            ctx.fillStyle = (body.gameLevel === 9) ? 'white' : 'black'; 
-            ctx.beginPath();
-            ctx.arc(body.position.x - 10, body.position.y - 10, 2, 0, 2 * Math.PI);
-            ctx.arc(body.position.x + 10, body.position.y - 10, 2, 0, 2 * Math.PI);
-            ctx.fill();
+            // 画像がない場合のみ顔（目）を描画
+            if (!fish.image) {
+                ctx.fillStyle = (body.gameLevel === 9) ? 'white' : 'black'; 
+                ctx.beginPath();
+                ctx.arc(body.position.x - 10, body.position.y - 10, 2, 0, 2 * Math.PI);
+                ctx.arc(body.position.x + 10, body.position.y - 10, 2, 0, 2 * Math.PI);
+                ctx.fill();
+            }
         }
     }
 }
