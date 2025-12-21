@@ -247,11 +247,6 @@ function handleCollisions(event) {
 
             const level = bodyA.gameLevel;
             
-            // Max level reached? (Whale)
-            if (level >= FISH_TYPES.length) {
-                continue; 
-            }
-
             // Mark for removal
             bodyA.isRemoving = true;
             bodyB.isRemoving = true;
@@ -265,6 +260,13 @@ function handleCollisions(event) {
 
             // Add score
             addScore(FISH_TYPES[level - 1].score); // Score for the merge
+
+            // If max level (Whale), they disappear without creating a new one
+            if (level >= FISH_TYPES.length) {
+                audioManager.playFanfare();
+                triggerConfetti(midX, midY, 300);
+                continue;
+            }
 
             // Create new fish (Level + 1)
             const newLevel = level + 1;
@@ -392,8 +394,8 @@ function renderDeadline() {
 }
 
 // --- Confetti Effect ---
-function triggerConfetti(x, y) {
-    for (let i = 0; i < 100; i++) {
+function triggerConfetti(x, y, count = 100) {
+    for (let i = 0; i < count; i++) {
         confettiParticles.push({
             x: x,
             y: y,
@@ -461,9 +463,10 @@ function setupDebugUI() {
     const modeToggle = document.getElementById('debug-mode-toggle');
     const fishSelect = document.getElementById('debug-fish-select');
     const colliderToggle = document.getElementById('debug-show-colliders');
+    const closeBtn = document.getElementById('debug-close-btn');
 
     // 要素が見つからない場合は処理をスキップ（HTMLが更新されていない場合などの対策）
-    if (!panel || !toggleBtn || !modeToggle || !fishSelect || !colliderToggle) {
+    if (!panel || !toggleBtn || !modeToggle || !fishSelect || !colliderToggle || !closeBtn) {
         return;
     }
 
@@ -478,6 +481,11 @@ function setupDebugUI() {
     // パネル開閉
     toggleBtn.addEventListener('click', () => {
         panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+
+    // パネル閉じる
+    closeBtn.addEventListener('click', () => {
+        panel.style.display = 'none';
     });
 
     // デバッグモード切替

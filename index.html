@@ -32,17 +32,29 @@
 
     <!-- Debug UI -->
     <div id="debug-panel">
+        <div class="debug-header">
+            <h3>Debug Menu</h3>
+            <button id="debug-close-btn">×</button>
+        </div>
         <div class="debug-row">
-            <label><input type="checkbox" id="debug-mode-toggle"> Debug Mode</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="debug-mode-toggle">
+                <span class="slider"></span>
+            </label>
+            <span class="debug-label">Debug Mode</span>
         </div>
         <div class="debug-row">
             <select id="debug-fish-select" disabled></select>
         </div>
         <div class="debug-row">
-            <label><input type="checkbox" id="debug-show-colliders"> Show Colliders</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="debug-show-colliders">
+                <span class="slider"></span>
+            </label>
+            <span class="debug-label">Show Colliders</span>
         </div>
     </div>
-    <button id="debug-toggle-btn">⚙️</button>
+    <button id="debug-toggle-btn">☰</button>
 </div>
 
 </body>
