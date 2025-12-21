@@ -142,7 +142,7 @@ button:active {
     margin-left: 12px;
     font-weight: 500;
 }
-#debug-fish-select {
+#debug-fish-select, #debug-theme-select {
     width: 100%;
     padding: 12px;
     font-size: 16px;
@@ -154,11 +154,11 @@ button:active {
     cursor: pointer;
     transition: border-color 0.2s;
 }
-#debug-fish-select:disabled {
+#debug-fish-select:disabled, #debug-theme-select:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
-#debug-fish-select:focus {
+#debug-fish-select:focus, #debug-theme-select:focus {
     outline: none;
     border-color: #4ecdc4;
 }

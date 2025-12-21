@@ -1,4 +1,4 @@
-import { FISH_TYPES, MAX_DROP_LEVEL, GAME_WIDTH, GAME_HEIGHT, WALL_THICKNESS, DEADLINE_Y } from './constants.js';
+import { THEMES, MAX_DROP_LEVEL, GAME_WIDTH, GAME_HEIGHT, WALL_THICKNESS, DEADLINE_Y } from './constants.js';
 import { AudioManager } from './audio.js';
 
 // --- Matter.js Aliases ---
@@ -26,6 +26,7 @@ let confettiParticles = []; // 紙吹雪用配列
 let isDebugMode = false;
 let debugFishLevel = 1;
 let showColliders = false;
+let currentFishTypes = THEMES.fish; // デフォルトテーマ
 
 // --- Initialization ---
 async function init() {
@@ -98,7 +99,7 @@ async function init() {
 // --- Game Logic ---
 
 function preloadImages() {
-    const promises = FISH_TYPES.map(fish => {
+    const promises = currentFishTypes.map(fish => {
         return new Promise((resolve) => {
             if (!fish.image) {
                 resolve();
@@ -114,6 +115,7 @@ function preloadImages() {
             };
             img.onerror = () => {
                 console.warn(`Failed to load image: ${fish.image}`);
+                fish.image = null; // 画像読み込み失敗時はnullにして色表示にフォールバック
                 resolve();
             };
         });
@@ -131,7 +133,7 @@ function setNextFish() {
     } else {
         nextFishLevel = getRandomDropLevel();
     }
-    const fishType = FISH_TYPES[nextFishLevel - 1];
+    const fishType = currentFishTypes[nextFishLevel - 1];
     const nextCircle = document.getElementById('next-fish-circle');
 
     if (fishType.image) {
@@ -153,7 +155,7 @@ function setNextFish() {
 function spawnCurrentFish() {
     if (gameOver) return;
 
-    const fishType = FISH_TYPES[nextFishLevel - 1];
+    const fishType = currentFishTypes[nextFishLevel - 1];
     
     // 画像設定がある場合はスプライトを使用、なければ色を使用
     const renderConfig = fishType.image ? {
@@ -259,10 +261,10 @@ function handleCollisions(event) {
             Composite.remove(engine.world, [bodyA, bodyB]);
 
             // Add score
-            addScore(FISH_TYPES[level - 1].score); // Score for the merge
+            addScore(currentFishTypes[level - 1].score); // Score for the merge
 
             // If max level (Whale), they disappear without creating a new one
-            if (level >= FISH_TYPES.length) {
+            if (level >= currentFishTypes.length) {
                 audioManager.playFanfare();
                 triggerConfetti(midX, midY, 300);
                 continue;
@@ -271,13 +273,13 @@ function handleCollisions(event) {
             // Create new fish (Level + 1)
             const newLevel = level + 1;
             
-            if (newLevel === FISH_TYPES.length) { // クジラ(レベル11)の場合
+            if (newLevel === currentFishTypes.length) { // クジラ(レベル11)の場合
                 audioManager.playFanfare();
                 triggerConfetti(midX, midY);
             } else {
                 audioManager.playMerge(newLevel);
             }
-            const newFishType = FISH_TYPES[newLevel - 1];
+            const newFishType = currentFishTypes[newLevel - 1];
             
             // 進化後の魚のレンダリング設定
             const renderConfig = newFishType.image ? {
@@ -346,9 +348,44 @@ function triggerGameOver() {
     Runner.stop(runner);
 }
 
-window.resetGame = function() {
-    location.reload(); // Simple reload for module based reset
-};
+function resetGame() {
+    // ゲームオーバー状態の解除
+    gameOver = false;
+    document.getElementById('game-over-screen').style.display = 'none';
+
+    // スコアのリセット
+    score = 0;
+    document.getElementById('score').innerText = score;
+
+    // 物理世界のオブジェクトをクリア（魚のみ削除、壁は残す）
+    const bodies = Composite.allBodies(engine.world);
+    const bodiesToRemove = [];
+    for (const body of bodies) {
+        if (body.label === 'fish' || body.label === 'current_fish') {
+            bodiesToRemove.push(body);
+        }
+    }
+    Composite.remove(engine.world, bodiesToRemove);
+
+    // 紙吹雪のリセット
+    confettiParticles = [];
+
+    // 変数リセット
+    currentFish = null;
+    isDropping = false;
+    lastDropX = GAME_WIDTH / 2;
+
+    // ランナーの再開（停止していた場合）
+    Runner.stop(runner); // 念のため一度止める
+    Runner.run(runner, engine);
+    
+    // 新しい魚の生成
+    setNextFish();
+    spawnCurrentFish();
+}
+
+// HTMLのボタンから呼べるようにグローバルに公開
+window.resetGame = resetGame;
 
 // --- Custom Rendering ---
 function renderFishLabels() {
@@ -362,7 +399,7 @@ function renderFishLabels() {
 
     for (let body of bodies) {
         if (body.gameLevel) {
-            const fish = FISH_TYPES[body.gameLevel - 1];
+            const fish = currentFishTypes[body.gameLevel - 1];
             // Adjust text color based on background
             ctx.fillStyle = (body.gameLevel === 9) ? 'white' : '#333'; 
             
@@ -464,19 +501,23 @@ function setupDebugUI() {
     const fishSelect = document.getElementById('debug-fish-select');
     const colliderToggle = document.getElementById('debug-show-colliders');
     const closeBtn = document.getElementById('debug-close-btn');
+    const themeSelect = document.getElementById('debug-theme-select');
 
     // 要素が見つからない場合は処理をスキップ（HTMLが更新されていない場合などの対策）
-    if (!panel || !toggleBtn || !modeToggle || !fishSelect || !colliderToggle || !closeBtn) {
+    if (!panel || !toggleBtn || !modeToggle || !fishSelect || !colliderToggle || !closeBtn || !themeSelect) {
         return;
     }
 
-    // 魚リストの生成
-    FISH_TYPES.forEach(fish => {
+    // テーマリストの生成
+    Object.keys(THEMES).forEach(theme => {
         const option = document.createElement('option');
-        option.value = fish.level;
-        option.text = `${fish.level}: ${fish.name}`;
-        fishSelect.appendChild(option);
+        option.value = theme;
+        option.text = theme.charAt(0).toUpperCase() + theme.slice(1);
+        themeSelect.appendChild(option);
     });
+
+    // 魚リストの生成（初期）
+    updateDebugFishList(fishSelect);
 
     // パネル開閉
     toggleBtn.addEventListener('click', () => {
@@ -504,6 +545,32 @@ function setupDebugUI() {
     // コライダー表示切替
     colliderToggle.addEventListener('change', (e) => {
         showColliders = e.target.checked;
+    });
+
+    // テーマ切り替え
+    themeSelect.addEventListener('change', async (e) => {
+        const newTheme = e.target.value;
+        currentFishTypes = THEMES[newTheme];
+        try {
+            await preloadImages();
+        } catch (error) {
+            console.error("Failed to preload images:", error);
+        }
+        updateDebugFishList(fishSelect);
+        resetGame();
+    });
+}
+
+function updateDebugFishList(selectElement) {
+    // 既存のオプションをクリア
+    selectElement.innerHTML = '';
+    
+    // 現在のテーマに基づいてリストを再生成
+    currentFishTypes.forEach(fish => {
+        const option = document.createElement('option');
+        option.value = fish.level;
+        option.text = `${fish.level}: ${fish.name}`;
+        selectElement.appendChild(option);
     });
 }
 
