@@ -27,6 +27,8 @@ let isDebugMode = false;
 let debugFishLevel = 1;
 let showColliders = false;
 let currentFishTypes = THEMES.fish; // デフォルトテーマ
+let currentThemeName = 'fish';
+let currentGravity = 1.5;
 
 // --- Initialization ---
 async function init() {
@@ -38,6 +40,9 @@ async function init() {
     // Setup Audio
     audioManager = new AudioManager();
 
+    // デバッグ設定の読み込み
+    loadDebugSettings();
+
     // 画像をプリロードしてスケールを計算
     await preloadImages();
 
@@ -46,8 +51,7 @@ async function init() {
 
     // Setup Engine
     engine = Engine.create();
-    engine.world.gravity.y = 1.5; // 6. 物理パラメータ: 重力調整
-
+    engine.world.gravity.y = currentGravity;
     // Setup Render
     render = Render.create({
         element: gameContainer,
@@ -68,10 +72,10 @@ async function init() {
     Composite.add(engine.world, [ground, leftWall, rightWall]);
 
     // Input Handling
-    render.canvas.addEventListener('mousemove', handleInputMove);
-    render.canvas.addEventListener('touchmove', handleInputMove, { passive: false });
-    render.canvas.addEventListener('click', handleInputDrop);
-    render.canvas.addEventListener('touchend', handleInputDrop);
+    window.addEventListener('mousemove', handleInputMove);
+    window.addEventListener('touchmove', handleInputMove, { passive: false });
+    window.addEventListener('click', handleInputDrop);
+    window.addEventListener('touchend', handleInputDrop);
 
     // Collision Handling (Merge)
     Events.on(engine, 'collisionStart', handleCollisions);
@@ -209,6 +213,9 @@ function handleInputMove(e) {
 }
 
 function handleInputDrop(e) {
+    // UI要素（ボタン、入力、デバッグパネル等）への操作は無視する
+    if (e.target.closest('button, input, select, label, #debug-panel, #debug-toggle-btn')) return;
+
     if (gameOver || isDropping || !currentFish) return;
     e.preventDefault(); // Prevent double firing on some devices
 
@@ -224,7 +231,7 @@ function handleInputDrop(e) {
     
     // 6. 物理パラメータ: 反発係数, 摩擦
     currentFish.restitution = 0.2; 
-    currentFish.friction = 0.5;
+    currentFish.friction = 0.1;
     currentFish.label = 'fish'; // Change label to active fish
 
     // Wait before spawning next
@@ -294,7 +301,7 @@ function handleCollisions(event) {
                 label: 'fish',
                 render: renderConfig,
                 restitution: 0.2,
-                friction: 0.5
+                friction: 0.1
             });
             newBody.gameLevel = newLevel;
 
@@ -394,26 +401,31 @@ function renderFishLabels() {
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#333';
     ctx.font = 'bold 12px Arial';
 
     for (let body of bodies) {
         if (body.gameLevel) {
             const fish = currentFishTypes[body.gameLevel - 1];
+            
+            ctx.save();
+            ctx.translate(body.position.x, body.position.y);
+            ctx.rotate(body.angle);
+
             // Adjust text color based on background
             ctx.fillStyle = (body.gameLevel === 9) ? 'white' : '#333'; 
             
             // Simple text drawing
-            ctx.fillText(fish.name, body.position.x, body.position.y);
+            ctx.fillText(fish.name, 0, 0);
             
             // 画像がない場合のみ顔（目）を描画
             if (!fish.image) {
                 ctx.fillStyle = (body.gameLevel === 9) ? 'white' : 'black'; 
                 ctx.beginPath();
-                ctx.arc(body.position.x - 10, body.position.y - 10, 2, 0, 2 * Math.PI);
-                ctx.arc(body.position.x + 10, body.position.y - 10, 2, 0, 2 * Math.PI);
+                ctx.arc(-10, -10, 2, 0, 2 * Math.PI);
+                ctx.arc(10, -10, 2, 0, 2 * Math.PI);
                 ctx.fill();
             }
+            ctx.restore();
         }
     }
 }
@@ -502,9 +514,19 @@ function setupDebugUI() {
     const colliderToggle = document.getElementById('debug-show-colliders');
     const closeBtn = document.getElementById('debug-close-btn');
     const themeSelect = document.getElementById('debug-theme-select');
+    const gravitySlider = document.getElementById('debug-gravity-slider');
+    const gravityValue = document.getElementById('debug-gravity-value');
+
+    // UIの状態を現在の設定に合わせる
+    if (modeToggle) modeToggle.checked = isDebugMode;
+    if (colliderToggle) colliderToggle.checked = showColliders;
+    if (fishSelect) fishSelect.disabled = !isDebugMode;
+    if (themeSelect) themeSelect.value = currentThemeName;
+    if (gravitySlider) gravitySlider.value = currentGravity;
+    if (gravityValue) gravityValue.innerText = currentGravity.toFixed(1);
 
     // 要素が見つからない場合は処理をスキップ（HTMLが更新されていない場合などの対策）
-    if (!panel || !toggleBtn || !modeToggle || !fishSelect || !colliderToggle || !closeBtn || !themeSelect) {
+    if (!panel || !toggleBtn || !modeToggle || !fishSelect || !colliderToggle || !closeBtn || !themeSelect || !gravitySlider || !gravityValue) {
         return;
     }
 
@@ -515,6 +537,9 @@ function setupDebugUI() {
         option.text = theme.charAt(0).toUpperCase() + theme.slice(1);
         themeSelect.appendChild(option);
     });
+
+    // テーマ選択の初期値を設定
+    themeSelect.value = currentThemeName;
 
     // 魚リストの生成（初期）
     updateDebugFishList(fishSelect);
@@ -534,6 +559,7 @@ function setupDebugUI() {
         isDebugMode = e.target.checked;
         fishSelect.disabled = !isDebugMode;
         updateCurrentFishIfIdle();
+        saveDebugSettings();
     });
 
     // 魚選択
@@ -545,11 +571,13 @@ function setupDebugUI() {
     // コライダー表示切替
     colliderToggle.addEventListener('change', (e) => {
         showColliders = e.target.checked;
+        saveDebugSettings();
     });
 
     // テーマ切り替え
     themeSelect.addEventListener('change', async (e) => {
         const newTheme = e.target.value;
+        currentThemeName = newTheme;
         currentFishTypes = THEMES[newTheme];
         try {
             await preloadImages();
@@ -557,7 +585,17 @@ function setupDebugUI() {
             console.error("Failed to preload images:", error);
         }
         updateDebugFishList(fishSelect);
-        resetGame();
+        updateExistingFishes(); // リセットせずに既存の魚を更新
+        saveDebugSettings();
+    });
+
+    // 重力スライダー
+    gravitySlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        currentGravity = val;
+        if (engine) engine.world.gravity.y = currentGravity;
+        gravityValue.innerText = val.toFixed(1);
+        saveDebugSettings();
     });
 }
 
@@ -583,6 +621,59 @@ function updateCurrentFishIfIdle() {
             spawnCurrentFish();
         } else {
             setNextFish(); // UI更新のみ
+        }
+    }
+}
+
+// 盤面上の魚の見た目を現在のテーマに合わせて更新する
+function updateExistingFishes() {
+    const bodies = Composite.allBodies(engine.world);
+    for (const body of bodies) {
+        // fish または current_fish (ドロップ待ち) の場合
+        if (body.gameLevel) {
+            const newType = currentFishTypes[body.gameLevel - 1];
+            
+            // レンダリング設定の作成
+            const renderConfig = newType.image ? {
+                sprite: {
+                    texture: newType.image,
+                    xScale: newType.renderScale || 1,
+                    yScale: newType.renderScale || 1
+                }
+            } : { fillStyle: newType.color };
+
+            // ボディのrenderプロパティを更新
+            body.render = renderConfig;
+        }
+    }
+    // NEXT表示も更新
+    setNextFish();
+}
+
+function saveDebugSettings() {
+    const settings = {
+        isDebugMode,
+        showColliders,
+        currentThemeName,
+        currentGravity
+    };
+    localStorage.setItem('shusseuo_debug_settings', JSON.stringify(settings));
+}
+
+function loadDebugSettings() {
+    const saved = localStorage.getItem('shusseuo_debug_settings');
+    if (saved) {
+        try {
+            const settings = JSON.parse(saved);
+            if (typeof settings.isDebugMode === 'boolean') isDebugMode = settings.isDebugMode;
+            if (typeof settings.showColliders === 'boolean') showColliders = settings.showColliders;
+            if (settings.currentThemeName && THEMES[settings.currentThemeName]) {
+                currentThemeName = settings.currentThemeName;
+                currentFishTypes = THEMES[currentThemeName];
+            }
+            if (typeof settings.currentGravity === 'number') currentGravity = settings.currentGravity;
+        } catch (e) {
+            console.error("Failed to load debug settings", e);
         }
     }
 }
