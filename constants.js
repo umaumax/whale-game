@@ -17,6 +17,6 @@ export const FISH_TYPES = [
 export const MAX_DROP_LEVEL = 5;
 
 export const WALL_THICKNESS = 50;
-export const GAME_WIDTH = 500; // スマホでも見やすい幅
-export const GAME_HEIGHT = 700;
+export const GAME_WIDTH = Math.min(window.innerWidth, 500); // 画面幅に合わせて最大500px
+export const GAME_HEIGHT = Math.min(window.innerHeight - 160, 700); // ヘッダー分(100px) + 下部余白(60px)を確保
 export const DEADLINE_Y = 100; // 上部のデッドライン

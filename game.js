@@ -74,6 +74,7 @@ async function init() {
     Events.on(render, 'afterRender', renderFishLabels);
     Events.on(render, 'afterRender', renderDeadline);
     Events.on(render, 'afterRender', renderConfetti); // 紙吹雪の描画
+    Events.on(render, 'afterRender', renderGuideLine); // ガイドラインの描画
 
     // Start
     Render.run(render);
@@ -420,6 +421,24 @@ function renderConfetti() {
         ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
         ctx.restore();
     }
+}
+
+// --- Guide Line ---
+function renderGuideLine() {
+    if (gameOver || isDropping || !currentFish) return;
+
+    const ctx = render.context;
+    const x = currentFish.position.x;
+    const y = currentFish.position.y;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, GAME_HEIGHT);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
 }
 
 // Start Game
