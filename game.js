@@ -23,12 +23,15 @@ let gameOver = false;
 let gameContainer = document.getElementById('game-container');
 
 // --- Initialization ---
-function init() {
+async function init() {
     // Update Best Score UI
     document.getElementById('best-score').innerText = bestScore;
 
     // Setup Audio
     audioManager = new AudioManager();
+
+    // 画像をプリロードしてスケールを計算
+    await preloadImages();
 
     // Setup Engine
     engine = Engine.create();
@@ -81,6 +84,30 @@ function init() {
 
 // --- Game Logic ---
 
+function preloadImages() {
+    const promises = FISH_TYPES.map(fish => {
+        return new Promise((resolve) => {
+            if (!fish.image) {
+                resolve();
+                return;
+            }
+            const img = new Image();
+            img.src = fish.image;
+            img.onload = () => {
+                // 画像の長辺を直径(radius * 2)に合わせるためのスケールを計算
+                const maxDimension = Math.max(img.width, img.height);
+                fish.renderScale = (fish.radius * 2) / maxDimension;
+                resolve();
+            };
+            img.onerror = () => {
+                console.warn(`Failed to load image: ${fish.image}`);
+                resolve();
+            };
+        });
+    });
+    return Promise.all(promises);
+}
+
 function getRandomDropLevel() {
     return Math.floor(Math.random() * MAX_DROP_LEVEL) + 1;
 }
@@ -104,8 +131,8 @@ function spawnCurrentFish() {
     const renderConfig = fishType.image ? {
         sprite: {
             texture: fishType.image,
-            xScale: (fishType.radius * 2) / 100, // 画像が100pxの場合のスケール計算
-            yScale: (fishType.radius * 2) / 100
+            xScale: fishType.renderScale || 1,
+            yScale: fishType.renderScale || 1
         }
     } : { fillStyle: fishType.color };
 
@@ -214,8 +241,8 @@ function handleCollisions(event) {
             const renderConfig = newFishType.image ? {
                 sprite: {
                     texture: newFishType.image,
-                    xScale: (newFishType.radius * 2) / 100,
-                    yScale: (newFishType.radius * 2) / 100
+                    xScale: newFishType.renderScale || 1,
+                    yScale: newFishType.renderScale || 1
                 }
             } : { fillStyle: newFishType.color };
 
