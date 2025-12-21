@@ -25,9 +25,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 20px 10px 70px; /* 左側にハンバーガーメニュー分の余白を確保 */
-    box-sizing: border-box;
-    pointer-events: auto;
+    padding: 10px 20pxto;
     z-index: 10;
 }
 .score-display {
@@ -209,10 +207,8 @@ input:checked + .slider:before {
 }
 #debug-toggle-btn {
     position: fixed;
-    top: 15px;
-    left: 15px;
-    z-index: 200;
-    padding: 0;
+    bottom: 15px;x;
+    z-index: 200;0;
     font-size: 24px;
     background: rgba(30, 30, 30, 0.6);
     border-radius: 50%;
