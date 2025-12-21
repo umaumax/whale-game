@@ -29,6 +29,20 @@
         <div id="final-score">Score: 0</div>
         <button onclick="resetGame()">リトライ</button>
     </div>
+
+    <!-- Debug UI -->
+    <div id="debug-panel">
+        <div class="debug-row">
+            <label><input type="checkbox" id="debug-mode-toggle"> Debug Mode</label>
+        </div>
+        <div class="debug-row">
+            <select id="debug-fish-select" disabled></select>
+        </div>
+        <div class="debug-row">
+            <label><input type="checkbox" id="debug-show-colliders"> Show Colliders</label>
+        </div>
+    </div>
+    <button id="debug-toggle-btn">⚙️</button>
 </div>
 
 </body>

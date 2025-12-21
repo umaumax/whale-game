@@ -21,11 +21,16 @@ let lastDropX = GAME_WIDTH / 2;
 let score = 0;
 let bestScore = localStorage.getItem('shusseuo_best') || 0;
 let gameOver = false;
-let gameContainer = document.getElementById('game-container');
+let gameContainer;
 let confettiParticles = []; // 紙吹雪用配列
+let isDebugMode = false;
+let debugFishLevel = 1;
+let showColliders = false;
 
 // --- Initialization ---
 async function init() {
+    gameContainer = document.getElementById('game-container');
+
     // Update Best Score UI
     document.getElementById('best-score').innerText = bestScore;
 
@@ -34,6 +39,9 @@ async function init() {
 
     // 画像をプリロードしてスケールを計算
     await preloadImages();
+
+    // デバッグUIのセットアップ
+    setupDebugUI();
 
     // Setup Engine
     engine = Engine.create();
@@ -75,6 +83,7 @@ async function init() {
     Events.on(render, 'afterRender', renderDeadline);
     Events.on(render, 'afterRender', renderConfetti); // 紙吹雪の描画
     Events.on(render, 'afterRender', renderGuideLine); // ガイドラインの描画
+    Events.on(render, 'afterRender', renderDebugColliders); // デバッグ用コライダー描画
 
     // Start
     Render.run(render);
@@ -117,7 +126,11 @@ function getRandomDropLevel() {
 }
 
 function setNextFish() {
-    nextFishLevel = getRandomDropLevel();
+    if (isDebugMode) {
+        nextFishLevel = debugFishLevel;
+    } else {
+        nextFishLevel = getRandomDropLevel();
+    }
     const fishType = FISH_TYPES[nextFishLevel - 1];
     const nextCircle = document.getElementById('next-fish-circle');
 
@@ -439,6 +452,85 @@ function renderGuideLine() {
     ctx.setLineDash([5, 5]);
     ctx.stroke();
     ctx.setLineDash([]);
+}
+
+// --- Debug Functions ---
+function setupDebugUI() {
+    const panel = document.getElementById('debug-panel');
+    const toggleBtn = document.getElementById('debug-toggle-btn');
+    const modeToggle = document.getElementById('debug-mode-toggle');
+    const fishSelect = document.getElementById('debug-fish-select');
+    const colliderToggle = document.getElementById('debug-show-colliders');
+
+    // 要素が見つからない場合は処理をスキップ（HTMLが更新されていない場合などの対策）
+    if (!panel || !toggleBtn || !modeToggle || !fishSelect || !colliderToggle) {
+        return;
+    }
+
+    // 魚リストの生成
+    FISH_TYPES.forEach(fish => {
+        const option = document.createElement('option');
+        option.value = fish.level;
+        option.text = `${fish.level}: ${fish.name}`;
+        fishSelect.appendChild(option);
+    });
+
+    // パネル開閉
+    toggleBtn.addEventListener('click', () => {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+
+    // デバッグモード切替
+    modeToggle.addEventListener('change', (e) => {
+        isDebugMode = e.target.checked;
+        fishSelect.disabled = !isDebugMode;
+        updateCurrentFishIfIdle();
+    });
+
+    // 魚選択
+    fishSelect.addEventListener('change', (e) => {
+        debugFishLevel = parseInt(e.target.value);
+        updateCurrentFishIfIdle();
+    });
+
+    // コライダー表示切替
+    colliderToggle.addEventListener('change', (e) => {
+        showColliders = e.target.checked;
+    });
+}
+
+function updateCurrentFishIfIdle() {
+    // 待機中（ドロップ前）なら、手持ちの魚を即座に更新する
+    if (isDebugMode) {
+        nextFishLevel = debugFishLevel;
+        if (currentFish && !isDropping) {
+            Composite.remove(engine.world, currentFish);
+            spawnCurrentFish();
+        } else {
+            setNextFish(); // UI更新のみ
+        }
+    }
+}
+
+function renderDebugColliders() {
+    if (!showColliders) return;
+    const ctx = render.context;
+    const bodies = Composite.allBodies(engine.world);
+    
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#00FF00'; // 緑色で表示
+    
+    for (let body of bodies) {
+        if (body.circleRadius) { // 円形のみ描画
+            ctx.beginPath();
+            ctx.arc(body.position.x, body.position.y, body.circleRadius, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // 中心点
+            ctx.fillStyle = '#00FF00';
+            ctx.fillRect(body.position.x - 2, body.position.y - 2, 4, 4);
+        }
+    }
 }
 
 // Start Game
