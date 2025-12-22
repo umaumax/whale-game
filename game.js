@@ -24,6 +24,8 @@ let gameOver = false;
 let gameContainer;
 let confettiParticles = []; // 紙吹雪用配列
 let glowEffects = []; // 合体時の光エフェクト用
+let shakeTimer = 0; // 画面揺れタイマー
+let shakeIntensity = 0; // 画面揺れの強さ
 let isDebugMode = false;
 let debugFishLevel = 1;
 let showColliders = false;
@@ -31,6 +33,8 @@ let currentFishTypes = THEMES.fish; // デフォルトテーマ
 let currentThemeName = 'fish';
 let currentGravity = 1.5;
 let showBallLabels = false;
+let comboCount = 0;
+let lastMergeTime = 0;
 
 // --- Initialization ---
 async function init() {
@@ -47,6 +51,9 @@ async function init() {
 
     // 画像をプリロードしてスケールを計算
     await preloadImages();
+
+    // スプラッシュ画面のアニメーションセットアップ
+    setupSplashAnimation();
 
     // デバッグUIのセットアップ
     setupDebugUI();
@@ -90,6 +97,7 @@ async function init() {
 
     // Game Loop Events
     Events.on(engine, 'beforeUpdate', checkGameOver);
+    Events.on(engine, 'beforeUpdate', updateShake); // 画面揺れの更新
     
     // Custom Rendering for Text
     Events.on(render, 'afterRender', renderFishLabels);
@@ -102,7 +110,8 @@ async function init() {
     // Start
     Render.run(render);
     runner = Runner.create();
-    Runner.run(runner, engine);
+    // Runner.run(runner, engine); // ここではまだ開始しない
+    // スプラッシュ画面が表示されている
 
     // Initial Fish
     setNextFish();
@@ -197,7 +206,7 @@ function spawnCurrentFish() {
         isStatic: true,
         label: 'current_fish',
         render: renderConfig,
-        isSensor: true // ドロップ前は衝突しないようにセンサーにする
+        collisionFilter: { mask: 0 } // ドロップ前は誰とも衝突しない
     });
     
     // Custom property to store level
@@ -243,11 +252,11 @@ function handleInputDrop(e) {
     // Make dynamic
     Body.setStatic(currentFish, false);
     
-    // センサーを解除して衝突するようにする
-    currentFish.isSensor = false;
+    // 衝突フィルタをデフォルトに戻して衝突するようにする
+    currentFish.collisionFilter = { category: 0x0001, mask: 0xFFFFFFFF, group: 0 };
     
     // 6. 物理パラメータ: 反発係数, 摩擦
-    currentFish.restitution = 0.0; 
+    currentFish.restitution = 0.1; // 少し反発させることで重なりを解消しやすくする
     currentFish.friction = 0.1;
     currentFish.label = 'fish'; // Change label to active fish
 
@@ -276,6 +285,15 @@ function handleCollisions(event) {
             bodyA.isRemoving = true;
             bodyB.isRemoving = true;
 
+            // コンボ判定
+            const now = Date.now();
+            if (now - lastMergeTime < 1500) { // 1.5秒以内の連続合体
+                comboCount++;
+            } else {
+                comboCount = 1;
+            }
+            lastMergeTime = now;
+
             // Calculate midpoint
             const midX = (bodyA.position.x + bodyB.position.x) / 2;
             const midY = (bodyA.position.y + bodyB.position.y) / 2;
@@ -292,6 +310,9 @@ function handleCollisions(event) {
                 const mergedFishType = currentFishTypes[level - 1];
                 triggerGlow(midX, midY, mergedFishType.radius, mergedFishType.color);
                 triggerConfetti(midX, midY, 300);
+                if (comboCount > 1) {
+                    triggerShake(20, 400); // コンボ時のみ揺らす
+                }
                 continue;
             }
 
@@ -301,8 +322,14 @@ function handleCollisions(event) {
             if (newLevel === currentFishTypes.length) { // クジラ(レベル11)の場合
                 audioManager.playFanfare();
                 triggerConfetti(midX, midY);
+                if (comboCount > 1) {
+                    triggerShake(15, 300);
+                }
             } else {
                 audioManager.playMerge(newLevel);
+                if (comboCount > 1) {
+                    triggerShake(newLevel * 1.5, 150); // コンボ時のみ揺らす
+                }
             }
             const newFishType = currentFishTypes[newLevel - 1];
             triggerGlow(midX, midY, newFishType.radius, newFishType.color);
@@ -319,7 +346,7 @@ function handleCollisions(event) {
             const newBody = Bodies.circle(midX, midY, newFishType.radius, {
                 label: 'fish',
                 render: renderConfig,
-                restitution: 0.0,
+                restitution: 0.1,
                 friction: 0.1
             });
             newBody.gameLevel = newLevel;
@@ -403,6 +430,13 @@ function resetGame() {
     // 紙吹雪のリセット
     confettiParticles = [];
 
+    // シェイクリセット
+    shakeTimer = 0;
+    shakeIntensity = 0;
+    comboCount = 0;
+    lastMergeTime = 0;
+    if (gameContainer) gameContainer.style.transform = 'none';
+
     // 変数リセット
     currentFish = null;
     isDropping = false;
@@ -419,6 +453,50 @@ function resetGame() {
 
 // HTMLのボタンから呼べるようにグローバルに公開
 window.resetGame = resetGame;
+
+function startGame() {
+    document.getElementById('splash-screen').style.display = 'none';
+    audioManager.resume();
+    // ランナー開始
+    Runner.run(runner, engine);
+}
+window.startGame = startGame;
+
+function backToTitle() {
+    // ゲームリセット（物理演算停止含む）
+    resetGame();
+    // ランナーを停止
+    Runner.stop(runner);
+    // 画面切り替え
+    document.getElementById('game-over-screen').style.display = 'none';
+    document.getElementById('splash-screen').style.display = 'flex';
+}
+window.backToTitle = backToTitle;
+
+// --- Screen Shake ---
+function triggerShake(intensity, duration) {
+    // より強い揺れ、または長い時間を優先して更新
+    shakeIntensity = Math.max(shakeIntensity, intensity);
+    shakeTimer = Math.max(shakeTimer, duration);
+}
+
+function updateShake() {
+    if (shakeTimer > 0) {
+        shakeTimer -= 16.66; // 60fps想定で減算
+        if (shakeTimer <= 0) {
+            shakeTimer = 0;
+            shakeIntensity = 0;
+            gameContainer.style.transform = 'none';
+        } else {
+            // ランダムに位置をずらす
+            // 時間経過とともに減衰させる処理を入れるとより自然になりますが、
+            // ここではシンプルに一定時間揺らします
+            const x = (Math.random() - 0.5) * 2 * shakeIntensity;
+            const y = (Math.random() - 0.5) * 2 * shakeIntensity;
+            gameContainer.style.transform = `translate(${x}px, ${y}px)`;
+        }
+    }
+}
 
 // --- Glow Effect ---
 function triggerGlow(x, y, radius, color) {
@@ -783,6 +861,56 @@ function renderDebugColliders() {
             ctx.arc(body.position.x, body.position.y, body.circleRadius, 0, 2 * Math.PI);
             ctx.stroke();
         }
+    }
+}
+
+// --- Splash Animation ---
+function setupSplashAnimation() {
+    const container = document.getElementById('splash-bg');
+    if (!container) return;
+    
+    container.innerHTML = ''; // クリア
+
+    const fishImages = currentFishTypes.map(f => f.image).filter(i => i);
+    
+    // 15匹程度生成
+    for (let i = 0; i < 15; i++) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'fish-wrapper';
+        
+        const fish = document.createElement('div');
+        fish.className = 'fish-body';
+        
+        // ランダムな画像または色
+        const img = fishImages[Math.floor(Math.random() * fishImages.length)];
+        if (img) {
+            fish.style.backgroundImage = `url(${img})`;
+        } else {
+            fish.style.backgroundColor = currentFishTypes[i % currentFishTypes.length].color;
+            fish.style.borderRadius = '50%';
+        }
+
+        const size = 30 + Math.random() * 50;
+        wrapper.style.width = `${size}px`;
+        wrapper.style.height = `${size}px`;
+        wrapper.style.top = `${Math.random() * 100}%`;
+        
+        const duration = 15 + Math.random() * 20;
+        const delay = Math.random() * -30;
+        const animName = Math.random() > 0.5 ? 'floatRight' : 'floatLeft';
+        
+        wrapper.style.animation = `${animName} ${duration}s linear ${delay}s infinite`;
+        
+        // クリックインタラクション
+        wrapper.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fish.classList.add('popped');
+            if (audioManager) audioManager.playDrop(); // 音を鳴らす
+            setTimeout(() => wrapper.remove(), 200); // アニメーション後に削除
+        });
+
+        wrapper.appendChild(fish);
+        container.appendChild(wrapper);
     }
 }
 

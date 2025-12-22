@@ -26,10 +26,20 @@
         </div>
     </div>
     
+    <div id="splash-screen">
+        <div id="splash-bg" class="splash-bg"></div>
+        <div class="title-container">
+            <h1>SHUSSEUO</h1>
+            <p>The Evolution Game</p>
+        </div>
+        <button class="start-btn" onclick="startGame()">START</button>
+    </div>
+
     <div id="game-over-screen">
         <h1>GAME OVER</h1>
         <div id="final-score">Score: 0</div>
-        <button onclick="resetGame()">リトライ</button>
+        <button class="retry-btn" onclick="resetGame()">RETRY</button>
+        <button class="title-btn" onclick="backToTitle()">TITLE</button>
     </div>
 
     <!-- Debug UI -->

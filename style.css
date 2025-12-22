@@ -74,6 +74,59 @@ body {
     color: #333;
     border: 2px solid white;
 }
+#splash-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 300;
+    color: white;
+    overflow: hidden;
+}
+.splash-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+}
+.fish-wrapper {
+    position: absolute;
+    pointer-events: auto;
+    cursor: pointer;
+}
+.fish-body {
+    width: 100%;
+    height: 100%;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.4;
+    transition: transform 0.2s ease-out, opacity 0.2s;
+}
+.fish-body.popped {
+    transform: scale(1.5);
+    opacity: 0;
+}
+.title-container h1 {
+    font-size: 64px;
+    margin: 0;
+    text-shadow: 4px 4px 0px rgba(0,0,0,0.3);
+    letter-spacing: 4px;
+}
+.title-container p {
+    font-size: 20px;
+    margin-top: 10px;
+    margin-bottom: 50px;
+    opacity: 0.8;
+}
 #game-over-screen {
     position: absolute;
     top: 0;
@@ -81,7 +134,7 @@ body {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.85);
-    display: none;
+    display: none; /* 初期状態は非表示 */
     flex-direction: column;
     justify-content: center;
     align-items: center;
@@ -91,21 +144,44 @@ body {
 #game-over-screen h1 {
     font-size: 48px;
     margin-bottom: 20px;
-    color: #ff6b6b;
+    background: linear-gradient(to right, #ff6b6b, #feca57);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
 }
 #final-score {
-    font-size: 32px;
-    margin-bottom: 30px;
+    font-size: 36px;
+    margin-bottom: 40px;
+    font-weight: bold;
+    color: white;
 }
 button {
-    padding: 15px 40px;
+    padding: 15px 50px;
     font-size: 24px;
-    background-color: #4ecdc4;
-    color: white;
+    font-weight: bold;
     border: none;
     border-radius: 50px;
     cursor: pointer;
-    transition: transform 0.1s;
+    transition: all 0.2s;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    margin: 10px;
+}
+.start-btn, .retry-btn {
+    background: linear-gradient(to right, #4ecdc4, #556270);
+    color: white;
+    min-width: 200px;
+}
+.title-btn {
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 18px;
+    padding: 12px 40px;
+    min-width: 160px;
+}
+button:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 button:active {
     transform: scale(0.95);
@@ -241,4 +317,14 @@ input:checked + .slider:before {
     border: 1px solid rgba(255,255,255,0.1);
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     transition: transform 0.1s;
+}
+
+@keyframes floatRight {
+    0% { transform: translateX(-100px) rotate(0deg); }
+    100% { transform: translateX(120vw) rotate(360deg); }
+}
+
+@keyframes floatLeft {
+    0% { transform: translateX(120vw) rotate(0deg); }
+    100% { transform: translateX(-100px) rotate(-360deg); }
 }
