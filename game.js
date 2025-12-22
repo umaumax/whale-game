@@ -35,6 +35,7 @@ let currentGravity = 1.5;
 let showBallLabels = false;
 let comboCount = 0;
 let lastMergeTime = 0;
+let isPaused = false;
 
 // --- Initialization ---
 async function init() {
@@ -91,6 +92,9 @@ async function init() {
     window.addEventListener('touchmove', handleInputMove, { passive: false });
     window.addEventListener('click', handleInputDrop);
     window.addEventListener('touchend', handleInputDrop);
+
+    // Pause Button
+    document.getElementById('pause-btn').addEventListener('click', togglePause);
 
     // Collision Handling (Merge)
     Events.on(engine, 'collisionStart', handleCollisions);
@@ -219,7 +223,7 @@ function spawnCurrentFish() {
 }
 
 function handleInputMove(e) {
-    if (gameOver || isDropping || !currentFish) return;
+    if (gameOver || isDropping || !currentFish || isPaused) return;
     e.preventDefault();
 
     const rect = render.canvas.getBoundingClientRect();
@@ -240,9 +244,9 @@ function handleInputMove(e) {
 
 function handleInputDrop(e) {
     // UI要素（ボタン、入力、デバッグパネル等）への操作は無視する
-    if (e.target.closest('button, input, select, label, #debug-panel, #debug-toggle-btn')) return;
+    if (e.target.closest('button, input, select, label, #debug-panel, #debug-toggle-btn, #pause-btn')) return;
 
-    if (gameOver || isDropping || !currentFish) return;
+    if (gameOver || isDropping || !currentFish || isPaused) return;
     e.preventDefault(); // Prevent double firing on some devices
 
     isDropping = true;
@@ -412,6 +416,8 @@ function resetGame() {
     // ゲームオーバー状態の解除
     gameOver = false;
     document.getElementById('game-over-screen').style.display = 'none';
+    document.getElementById('pause-screen').style.display = 'none';
+    isPaused = false;
 
     // スコアのリセット
     score = 0;
@@ -462,6 +468,23 @@ function startGame() {
 }
 window.startGame = startGame;
 
+function togglePause() {
+    if (gameOver) return;
+    
+    isPaused = !isPaused;
+    const pauseScreen = document.getElementById('pause-screen');
+    
+    if (isPaused) {
+        pauseScreen.style.display = 'flex';
+        Runner.stop(runner);
+    } else {
+        pauseScreen.style.display = 'none';
+        Runner.run(runner, engine);
+    }
+}
+// HTMLから呼べるようにグローバルに公開
+window.togglePause = togglePause;
+
 function backToTitle() {
     // ゲームリセット（物理演算停止含む）
     resetGame();
@@ -470,6 +493,7 @@ function backToTitle() {
     // 画面切り替え
     document.getElementById('game-over-screen').style.display = 'none';
     document.getElementById('splash-screen').style.display = 'flex';
+    document.getElementById('pause-screen').style.display = 'none';
 }
 window.backToTitle = backToTitle;
 

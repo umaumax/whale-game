@@ -18,6 +18,7 @@
             <div>Score: <span id="score">0</span></div>
             <div style="font-size: 16px; color: #aaa;">Best: <span id="best-score">0</span></div>
         </div>
+        <button id="pause-btn" class="icon-btn">❚❚</button>
         <div class="next-fish-display">
             <div>NEXT</div>
             <div class="next-fish-container">
@@ -33,6 +34,12 @@
             <p>The Evolution Game</p>
         </div>
         <button class="start-btn" onclick="startGame()">START</button>
+    </div>
+
+    <div id="pause-screen">
+        <h1>PAUSED</h1>
+        <button class="resume-btn" onclick="togglePause()">RESUME</button>
+        <button class="title-btn" onclick="backToTitle()">TITLE</button>
     </div>
 
     <div id="game-over-screen">
