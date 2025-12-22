@@ -23,12 +23,14 @@ let bestScore = localStorage.getItem('shusseuo_best') || 0;
 let gameOver = false;
 let gameContainer;
 let confettiParticles = []; // 紙吹雪用配列
+let glowEffects = []; // 合体時の光エフェクト用
 let isDebugMode = false;
 let debugFishLevel = 1;
 let showColliders = false;
 let currentFishTypes = THEMES.fish; // デフォルトテーマ
 let currentThemeName = 'fish';
 let currentGravity = 1.5;
+let showBallLabels = false;
 
 // --- Initialization ---
 async function init() {
@@ -65,9 +67,15 @@ async function init() {
     });
 
     // Create Walls (U-shape)
-    const ground = Bodies.rectangle(GAME_WIDTH / 2, GAME_HEIGHT + WALL_THICKNESS / 2 - 10, GAME_WIDTH, WALL_THICKNESS, { isStatic: true, render: { fillStyle: '#555' } });
-    const leftWall = Bodies.rectangle(0 - WALL_THICKNESS / 2, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, { isStatic: true, render: { fillStyle: '#555' } });
-    const rightWall = Bodies.rectangle(GAME_WIDTH + WALL_THICKNESS / 2, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, { isStatic: true, render: { fillStyle: '#555' } });
+    const wallOptions = {
+        isStatic: true,
+        render: { fillStyle: '#555' },
+        label: 'wall',
+        restitution: 0.0
+    };
+    const ground = Bodies.rectangle(GAME_WIDTH / 2, GAME_HEIGHT + WALL_THICKNESS / 2 - 10, GAME_WIDTH, WALL_THICKNESS, wallOptions);
+    const leftWall = Bodies.rectangle(0 - WALL_THICKNESS / 2, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, wallOptions);
+    const rightWall = Bodies.rectangle(GAME_WIDTH + WALL_THICKNESS / 2, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, wallOptions);
 
     Composite.add(engine.world, [ground, leftWall, rightWall]);
 
@@ -85,6 +93,7 @@ async function init() {
     
     // Custom Rendering for Text
     Events.on(render, 'afterRender', renderFishLabels);
+    Events.on(render, 'afterRender', renderGlows); // 光エフェクトの描画
     Events.on(render, 'afterRender', renderDeadline);
     Events.on(render, 'afterRender', renderConfetti); // 紙吹雪の描画
     Events.on(render, 'afterRender', renderGuideLine); // ガイドラインの描画
@@ -140,20 +149,28 @@ function setNextFish() {
     const fishType = currentFishTypes[nextFishLevel - 1];
     const nextCircle = document.getElementById('next-fish-circle');
 
+    // NEXTのサイズを実際の物理サイズに合わせる
+    const diameter = fishType.radius * 2;
+    nextCircle.style.width = `${diameter}px`;
+    nextCircle.style.height = `${diameter}px`;
+
     if (fishType.image) {
-        nextCircle.style.backgroundColor = 'transparent';
-        nextCircle.innerText = '';
         nextCircle.style.backgroundImage = `url(${fishType.image})`;
         nextCircle.style.backgroundSize = 'contain';
         nextCircle.style.backgroundRepeat = 'no-repeat';
         nextCircle.style.backgroundPosition = 'center';
+        nextCircle.style.backgroundColor = 'transparent';
+        nextCircle.innerText = '';
     } else {
         nextCircle.style.backgroundImage = 'none';
         nextCircle.style.backgroundColor = fishType.color;
         nextCircle.innerText = fishType.name;
         // Adjust text color for visibility
-        nextCircle.style.color = (nextFishLevel === 9) ? 'white' : '#333'; 
+        nextCircle.style.color = (nextFishLevel === 9) ? 'white' : '#333';
     }
+    
+    // 枠線をボールの色にする
+    nextCircle.style.border = `2px solid ${fishType.color}`;
 }
 
 function spawnCurrentFish() {
@@ -180,7 +197,7 @@ function spawnCurrentFish() {
         isStatic: true,
         label: 'current_fish',
         render: renderConfig,
-        collisionFilter: { group: -1 } // Don't collide yet
+        isSensor: true // ドロップ前は衝突しないようにセンサーにする
     });
     
     // Custom property to store level
@@ -226,26 +243,25 @@ function handleInputDrop(e) {
     // Make dynamic
     Body.setStatic(currentFish, false);
     
-    // 修正: 衝突フィルタをリセットして他の魚と衝突するようにする
-    currentFish.collisionFilter = { group: 0, category: 1, mask: 0xFFFFFFFF };
+    // センサーを解除して衝突するようにする
+    currentFish.isSensor = false;
     
     // 6. 物理パラメータ: 反発係数, 摩擦
-    currentFish.restitution = 0.2; 
+    currentFish.restitution = 0.0; 
     currentFish.friction = 0.1;
     currentFish.label = 'fish'; // Change label to active fish
 
     // Wait before spawning next
-    setTimeout(() => {
-        spawnCurrentFish();
-    }, 1000);
+    spawnCurrentFish();
 }
 
 function handleCollisions(event) {
     const pairs = event.pairs;
 
     for (let i = 0; i < pairs.length; i++) {
-        const bodyA = pairs[i].bodyA;
-        const bodyB = pairs[i].bodyB;
+        const pair = pairs[i];
+        const bodyA = pair.bodyA;
+        const bodyB = pair.bodyB;
 
         // Check if both are fish and have same level
         if (bodyA.label === 'fish' && bodyB.label === 'fish' && 
@@ -273,6 +289,8 @@ function handleCollisions(event) {
             // If max level (Whale), they disappear without creating a new one
             if (level >= currentFishTypes.length) {
                 audioManager.playFanfare();
+                const mergedFishType = currentFishTypes[level - 1];
+                triggerGlow(midX, midY, mergedFishType.radius, mergedFishType.color);
                 triggerConfetti(midX, midY, 300);
                 continue;
             }
@@ -287,6 +305,7 @@ function handleCollisions(event) {
                 audioManager.playMerge(newLevel);
             }
             const newFishType = currentFishTypes[newLevel - 1];
+            triggerGlow(midX, midY, newFishType.radius, newFishType.color);
             
             // 進化後の魚のレンダリング設定
             const renderConfig = newFishType.image ? {
@@ -300,7 +319,7 @@ function handleCollisions(event) {
             const newBody = Bodies.circle(midX, midY, newFishType.radius, {
                 label: 'fish',
                 render: renderConfig,
-                restitution: 0.2,
+                restitution: 0.0,
                 friction: 0.1
             });
             newBody.gameLevel = newLevel;
@@ -312,7 +331,14 @@ function handleCollisions(event) {
 
 function addScore(points) {
     score += points;
-    document.getElementById('score').innerText = score;
+    const scoreEl = document.getElementById('score');
+    scoreEl.innerText = score;
+
+    // アニメーション再生（リフロー強制でリセット）
+    scoreEl.classList.remove('score-pop');
+    void scoreEl.offsetWidth;
+    scoreEl.classList.add('score-pop');
+
     if (score > bestScore) {
         bestScore = score;
         localStorage.setItem('shusseuo_best', bestScore);
@@ -340,7 +366,7 @@ function checkGameOver() {
 
     if (isOverLine) {
         gameOverTimer += 16.6; // approx ms per frame
-        if (gameOverTimer > 2000) { // 2 seconds threshold
+        if (gameOverTimer > 1000) { // 1 second threshold
             triggerGameOver();
         }
     } else {
@@ -394,6 +420,48 @@ function resetGame() {
 // HTMLのボタンから呼べるようにグローバルに公開
 window.resetGame = resetGame;
 
+// --- Glow Effect ---
+function triggerGlow(x, y, radius, color) {
+    glowEffects.push({
+        x,
+        y,
+        radius,
+        color,
+        life: 1.0,
+    });
+}
+
+function renderGlows() {
+    const ctx = render.context;
+    for (let i = glowEffects.length - 1; i >= 0; i--) {
+        const glow = glowEffects[i];
+        
+        glow.life -= 0.04; // フェードアウト速度
+        
+        if (glow.life <= 0) {
+            glowEffects.splice(i, 1);
+            continue;
+        }
+        
+        // フェードアウトしながら少し拡大
+        const currentRadius = glow.radius * (1.1 + (1 - glow.life) * 0.5);
+        const alpha = glow.life * 0.7;
+        
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(glow.x, glow.y, currentRadius, 0, Math.PI * 2);
+        ctx.fillStyle = glow.color;
+        
+        // 影を使って光っているように見せる
+        ctx.shadowColor = glow.color;
+        ctx.shadowBlur = 30 * glow.life;
+        
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
 // --- Custom Rendering ---
 function renderFishLabels() {
     const ctx = render.context;
@@ -411,19 +479,28 @@ function renderFishLabels() {
             ctx.translate(body.position.x, body.position.y);
             ctx.rotate(body.angle);
 
-            // Adjust text color based on background
-            ctx.fillStyle = (body.gameLevel === 9) ? 'white' : '#333'; 
-            
-            // Simple text drawing
-            ctx.fillText(fish.name, 0, 0);
-            
-            // 画像がない場合のみ顔（目）を描画
-            if (!fish.image) {
-                ctx.fillStyle = (body.gameLevel === 9) ? 'white' : 'black'; 
-                ctx.beginPath();
-                ctx.arc(-10, -10, 2, 0, 2 * Math.PI);
-                ctx.arc(10, -10, 2, 0, 2 * Math.PI);
-                ctx.fill();
+            // 枠線の描画
+            ctx.beginPath();
+            ctx.arc(0, 0, fish.radius, 0, 2 * Math.PI);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = fish.color;
+            ctx.stroke();
+
+            if (showBallLabels) {
+                // Adjust text color based on background
+                ctx.fillStyle = (body.gameLevel === 9) ? 'white' : '#333'; 
+                
+                // Simple text drawing
+                ctx.fillText(fish.name, 0, 0);
+                
+                // 画像がない場合のみ顔（目）を描画
+                if (!fish.image) {
+                    ctx.fillStyle = (body.gameLevel === 9) ? 'white' : 'black'; 
+                    ctx.beginPath();
+                    ctx.arc(-10, -10, 2, 0, 2 * Math.PI);
+                    ctx.arc(10, -10, 2, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
             }
             ctx.restore();
         }
@@ -516,6 +593,7 @@ function setupDebugUI() {
     const themeSelect = document.getElementById('debug-theme-select');
     const gravitySlider = document.getElementById('debug-gravity-slider');
     const gravityValue = document.getElementById('debug-gravity-value');
+    const labelsToggle = document.getElementById('debug-show-labels');
 
     // UIの状態を現在の設定に合わせる
     if (modeToggle) modeToggle.checked = isDebugMode;
@@ -524,9 +602,10 @@ function setupDebugUI() {
     if (themeSelect) themeSelect.value = currentThemeName;
     if (gravitySlider) gravitySlider.value = currentGravity;
     if (gravityValue) gravityValue.innerText = currentGravity.toFixed(1);
+    if (labelsToggle) labelsToggle.checked = showBallLabels;
 
     // 要素が見つからない場合は処理をスキップ（HTMLが更新されていない場合などの対策）
-    if (!panel || !toggleBtn || !modeToggle || !fishSelect || !colliderToggle || !closeBtn || !themeSelect || !gravitySlider || !gravityValue) {
+    if (!panel || !toggleBtn || !modeToggle || !fishSelect || !colliderToggle || !closeBtn || !themeSelect || !gravitySlider || !gravityValue || !labelsToggle) {
         return;
     }
 
@@ -597,6 +676,12 @@ function setupDebugUI() {
         gravityValue.innerText = val.toFixed(1);
         saveDebugSettings();
     });
+
+    // ラベル表示切替
+    labelsToggle.addEventListener('change', (e) => {
+        showBallLabels = e.target.checked;
+        saveDebugSettings();
+    });
 }
 
 function updateDebugFishList(selectElement) {
@@ -655,7 +740,8 @@ function saveDebugSettings() {
         isDebugMode,
         showColliders,
         currentThemeName,
-        currentGravity
+        currentGravity,
+        showBallLabels
     };
     localStorage.setItem('shusseuo_debug_settings', JSON.stringify(settings));
 }
@@ -672,6 +758,7 @@ function loadDebugSettings() {
                 currentFishTypes = THEMES[currentThemeName];
             }
             if (typeof settings.currentGravity === 'number') currentGravity = settings.currentGravity;
+            if (typeof settings.showBallLabels === 'boolean') showBallLabels = settings.showBallLabels;
         } catch (e) {
             console.error("Failed to load debug settings", e);
         }
@@ -684,17 +771,17 @@ function renderDebugColliders() {
     const bodies = Composite.allBodies(engine.world);
     
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#00FF00'; // 緑色で表示
     
     for (let body of bodies) {
         if (body.circleRadius) { // 円形のみ描画
+            if (body.gameLevel) {
+                ctx.strokeStyle = currentFishTypes[body.gameLevel - 1].color;
+            } else {
+                ctx.strokeStyle = '#00FF00';
+            }
             ctx.beginPath();
             ctx.arc(body.position.x, body.position.y, body.circleRadius, 0, 2 * Math.PI);
             ctx.stroke();
-            
-            // 中心点
-            ctx.fillStyle = '#00FF00';
-            ctx.fillRect(body.position.x - 2, body.position.y - 2, 4, 4);
         }
     }
 }

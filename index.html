@@ -20,7 +20,9 @@
         </div>
         <div class="next-fish-display">
             <div>NEXT</div>
-            <div id="next-fish-circle" class="next-fish-circle"></div>
+            <div class="next-fish-container">
+                <div id="next-fish-circle" class="next-fish-circle"></div>
+            </div>
         </div>
     </div>
     
@@ -51,6 +53,13 @@
             <span class="debug-label" style="margin-left:0; margin-right:10px;">Gravity:</span>
             <input type="range" id="debug-gravity-slider" min="0" max="5" step="0.1" value="1.5" style="flex: 1; margin: 0 10px;">
             <span id="debug-gravity-value" style="min-width: 30px; text-align: right;">1.5</span>
+        </div>
+        <div class="debug-row">
+            <label class="toggle-switch">
+                <input type="checkbox" id="debug-show-labels">
+                <span class="slider"></span>
+            </label>
+            <span class="debug-label">Show Ball Labels</span>
         </div>
         <div class="debug-row">
             <label class="toggle-switch">
