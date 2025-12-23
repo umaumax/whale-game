@@ -25,7 +25,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 20pxto;
+    padding: 10px 20px 10px 70px; /* 左にデバッグボタン分の余白を確保 */
     z-index: 10;
 }
 .score-display {
@@ -33,6 +33,7 @@ body {
     font-size: 24px;
     font-weight: bold;
     text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    margin-left: 0; /* ui-layerのpaddingで管理するため不要に */
 }
 #score {
     display: inline-block;
@@ -120,6 +121,12 @@ body {
     margin: 0;
     text-shadow: 4px 4px 0px rgba(0,0,0,0.3);
     letter-spacing: 4px;
+    transition: transform 0.3s ease-in-out, text-shadow 0.3s ease-in-out;
+    cursor: default; /* ホバー時にテキスト選択カーソルになるのを防ぐ */
+}
+.title-container h1:hover {
+    transform: scale(1.05) rotate(-2deg);
+    text-shadow: 8px 8px 15px rgba(0,0,0,0.4);
 }
 .title-container p {
     font-size: 20px;
@@ -224,9 +231,6 @@ button {
 button:active {
     transform: scale(0.95);
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-button:active {
-    transform: scale(0.95);
 }
 
 /* Debug UI Styles */
@@ -344,8 +348,9 @@ input:checked + .slider:before {
 }
 #debug-toggle-btn {
     position: fixed;
-    bottom: 15px;x;
-    z-index: 200;0;
+    top: 20px;
+    left: 20px;
+    z-index: 200;
     font-size: 24px;
     background: rgba(30, 30, 30, 0.6);
     border-radius: 50%;
@@ -369,4 +374,33 @@ input:checked + .slider:before {
 @keyframes floatLeft {
     0% { transform: translateX(120vw) rotate(0deg); }
     100% { transform: translateX(-100px) rotate(-360deg); }
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 400px) {
+    #ui-layer {
+        padding: 10px 10px 10px 60px; /* 左右のpaddingを調整 */
+    }
+    .score-display {
+        font-size: 20px; /* スコアのフォントを少し小さく */
+    }
+    .next-fish-container {
+        width: 90px;
+        height: 90px;
+    }
+    .next-fish-display {
+        padding: 10px;
+    }
+    .icon-btn {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        font-size: 18px;
+    }
+    #debug-toggle-btn {
+        width: 40px;
+        height: 40px;
+        top: 15px;
+        left: 15px;
+    }
 }

@@ -59,6 +59,9 @@ async function init() {
     // デバッグUIのセットアップ
     setupDebugUI();
 
+    // ゲーム状態の復元を試みる
+    const isRestored = loadGameState();
+
     // Setup Engine
     engine = Engine.create();
     engine.world.gravity.y = currentGravity;
@@ -86,6 +89,11 @@ async function init() {
     const rightWall = Bodies.rectangle(GAME_WIDTH + WALL_THICKNESS / 2, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, wallOptions);
 
     Composite.add(engine.world, [ground, leftWall, rightWall]);
+    
+    // 復元した魚があればワールドに追加
+    if (isRestored && window.restoredBodies) {
+        Composite.add(engine.world, window.restoredBodies);
+    }
 
     // Input Handling
     window.addEventListener('mousemove', handleInputMove);
@@ -95,6 +103,9 @@ async function init() {
 
     // Pause Button
     document.getElementById('pause-btn').addEventListener('click', togglePause);
+
+    // ページを離れるときに保存
+    window.addEventListener('beforeunload', () => saveGameState());
 
     // Collision Handling (Merge)
     Events.on(engine, 'collisionStart', handleCollisions);
@@ -118,7 +129,7 @@ async function init() {
     // スプラッシュ画面が表示されている
 
     // Initial Fish
-    setNextFish();
+    setNextFish(isRestored); // 復元時はレベルを維持
     spawnCurrentFish();
 }
 
@@ -153,11 +164,13 @@ function getRandomDropLevel() {
     return Math.floor(Math.random() * MAX_DROP_LEVEL) + 1;
 }
 
-function setNextFish() {
-    if (isDebugMode) {
-        nextFishLevel = debugFishLevel;
-    } else {
-        nextFishLevel = getRandomDropLevel();
+function setNextFish(keepCurrentLevel = false) {
+    if (!keepCurrentLevel) {
+        if (isDebugMode) {
+            nextFishLevel = debugFishLevel;
+        } else {
+            nextFishLevel = getRandomDropLevel();
+        }
     }
     const fishType = currentFishTypes[nextFishLevel - 1];
     const nextCircle = document.getElementById('next-fish-circle');
@@ -220,6 +233,7 @@ function spawnCurrentFish() {
     isDropping = false;
     
     setNextFish();
+    saveGameState(); // 状態保存
 }
 
 function handleInputMove(e) {
@@ -249,6 +263,26 @@ function handleInputDrop(e) {
     if (gameOver || isDropping || !currentFish || isPaused) return;
     e.preventDefault(); // Prevent double firing on some devices
 
+    // タップ/クリックした位置にボールを移動させる
+    if (!isDropping) {
+        const rect = render.canvas.getBoundingClientRect();
+        let clientX = e.clientX; // click event
+        if (e.changedTouches && e.changedTouches.length > 0) { // touchend event
+            clientX = e.changedTouches[0].clientX;
+        }
+
+        if (clientX !== undefined) {
+            let x = clientX - rect.left;
+            
+            // Clamp x within walls
+            const radius = currentFish.circleRadius;
+            if (x < radius) x = radius;
+            if (x > GAME_WIDTH - radius) x = GAME_WIDTH - radius;
+
+            Body.setPosition(currentFish, { x: x, y: 50 });
+        }
+    }
+
     isDropping = true;
     lastDropX = currentFish.position.x;
     audioManager.playDrop();
@@ -270,6 +304,7 @@ function handleInputDrop(e) {
 
 function handleCollisions(event) {
     const pairs = event.pairs;
+    let stateChanged = false;
 
     for (let i = 0; i < pairs.length; i++) {
         const pair = pairs[i];
@@ -288,6 +323,7 @@ function handleCollisions(event) {
             // Mark for removal
             bodyA.isRemoving = true;
             bodyB.isRemoving = true;
+            stateChanged = true;
 
             // コンボ判定
             const now = Date.now();
@@ -358,6 +394,10 @@ function handleCollisions(event) {
             Composite.add(engine.world, newBody);
         }
     }
+
+    if (stateChanged) {
+        saveGameState();
+    }
 }
 
 function addScore(points) {
@@ -409,6 +449,7 @@ function triggerGameOver() {
     gameOver = true;
     document.getElementById('final-score').innerText = "Score: " + score;
     document.getElementById('game-over-screen').style.display = 'flex';
+    localStorage.removeItem('shusseuo_game_state'); // ゲームオーバー時はセーブデータを削除
     Runner.stop(runner);
 }
 
@@ -421,6 +462,7 @@ function resetGame() {
 
     // スコアのリセット
     score = 0;
+    localStorage.removeItem('shusseuo_game_state'); // セーブデータを削除
     document.getElementById('score').innerText = score;
 
     // 物理世界のオブジェクトをクリア（魚のみ削除、壁は残す）
@@ -885,6 +927,77 @@ function renderDebugColliders() {
             ctx.arc(body.position.x, body.position.y, body.circleRadius, 0, 2 * Math.PI);
             ctx.stroke();
         }
+    }
+}
+
+// --- Save/Load Game State ---
+function saveGameState() {
+    if (gameOver) return;
+
+    const bodies = Composite.allBodies(engine.world);
+    const fishes = [];
+    for (const body of bodies) {
+        // 盤面にある魚のみ保存（操作中の魚は保存しない）
+        if (body.label === 'fish' && body.gameLevel) {
+            fishes.push({
+                x: body.position.x,
+                y: body.position.y,
+                angle: body.angle,
+                level: body.gameLevel
+            });
+        }
+    }
+
+    const state = {
+        score,
+        nextFishLevel,
+        fishes
+    };
+    localStorage.setItem('shusseuo_game_state', JSON.stringify(state));
+}
+
+function loadGameState() {
+    const saved = localStorage.getItem('shusseuo_game_state');
+    if (!saved) return false;
+
+    try {
+        const state = JSON.parse(saved);
+        score = state.score || 0;
+        nextFishLevel = state.nextFishLevel || 1;
+        
+        // スコア表示更新
+        document.getElementById('score').innerText = score;
+
+        // 魚の復元用データを準備
+        if (state.fishes && Array.isArray(state.fishes)) {
+            window.restoredBodies = [];
+            for (const fishData of state.fishes) {
+                const fishType = currentFishTypes[fishData.level - 1];
+                if (!fishType) continue;
+
+                const renderConfig = fishType.image ? {
+                    sprite: {
+                        texture: fishType.image,
+                        xScale: fishType.renderScale || 1,
+                        yScale: fishType.renderScale || 1
+                    }
+                } : { fillStyle: fishType.color };
+
+                const body = Bodies.circle(fishData.x, fishData.y, fishType.radius, {
+                    label: 'fish',
+                    angle: fishData.angle,
+                    render: renderConfig,
+                    restitution: 0.1,
+                    friction: 0.1
+                });
+                body.gameLevel = fishData.level;
+                window.restoredBodies.push(body);
+            }
+        }
+        return true;
+    } catch (e) {
+        console.error("Failed to load game state", e);
+        return false;
     }
 }
 
