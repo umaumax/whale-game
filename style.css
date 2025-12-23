@@ -15,6 +15,47 @@ body {
     flex-direction: column; /* 縦並びにする */
     justify-content: flex-start; /* 上詰め */
     align-items: center;
+    transition: background 0.5s ease;
+    overflow: hidden;
+}
+
+/* テーマ別背景設定 */
+/* 魚（海）テーマ: 深海グラデーションと揺らぎアニメーション */
+.theme-fish {
+    background: linear-gradient(180deg, #001e4d 0%, #00081a 100%);
+    position: relative;
+}
+.theme-fish::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
+    animation: oceanShimmer 10s infinite linear;
+    pointer-events: none;
+    z-index: 0;
+}
+@keyframes oceanShimmer {
+    0% { transform: translate(-25%, -25%) rotate(0deg); }
+    100% { transform: translate(-25%, -25%) rotate(360deg); }
+}
+
+/* フルーツテーマ: 明るいパステルグラデーション */
+.theme-fruit {
+    background: linear-gradient(120deg, #f6d365 0%, #fda085 100%);
+    background-size: 200% 200%;
+    animation: fruitGradient 15s ease infinite;
+}
+@keyframes fruitGradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+#game-container canvas {
+    z-index: 1; /* 背景の上にキャンバスを表示 */
 }
 #ui-layer {
     position: relative; /* 重ねずに配置 */
@@ -81,7 +122,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+    background: linear-gradient(135deg, #021B79, #0575E6, #FDBB2D);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -152,10 +193,10 @@ body {
 #game-over-screen h1 {
     font-size: 48px;
     margin-bottom: 20px;
-    background: linear-gradient(to right, #ff6b6b, #feca57);
+    background: linear-gradient(to right, #0575E6, #FDBB2D);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    text-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
+    text-shadow: 0 0 20px rgba(253, 187, 45, 0.5);
 }
 #pause-screen {
     position: fixed;
@@ -218,7 +259,7 @@ button {
     margin: 10px;
 }
 .start-btn, .retry-btn, .resume-btn {
-    background: linear-gradient(to right, #4ecdc4, #556270);
+    background: linear-gradient(to right, #0575E6, #021B79);
     color: white;
     min-width: 200px;
 }
@@ -410,6 +451,53 @@ input:checked + .slider:before {
 @keyframes floatLeft {
     0% { transform: translateX(120vw) rotate(0deg); }
     100% { transform: translateX(-100px) rotate(-360deg); }
+}
+
+/* 泡のアニメーション */
+.bubble {
+    position: absolute;
+    bottom: -50px;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.2));
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0; /* 背景(shimmer)より手前、キャンバス(z:1)より奥 */
+    opacity: 0;
+    animation: rise linear forwards;
+}
+
+@keyframes rise {
+    0% {
+        transform: translateY(0) translateX(0);
+        opacity: 0;
+    }
+    10% { opacity: 0.6; }
+    25% { transform: translateY(-30vh) translateX(15px); }
+    50% { transform: translateY(-60vh) translateX(-15px); }
+    75% { transform: translateY(-90vh) translateX(15px); }
+    100% {
+        transform: translateY(-120vh) translateX(0);
+        opacity: 0;
+    }
+}
+
+/* フルーツのアニメーション */
+.fruit-particle {
+    position: absolute;
+    top: -50px;
+    font-size: 24px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.8;
+    animation: fall linear forwards;
+}
+
+@keyframes fall {
+    0% {
+        transform: translateY(0) rotate(0deg);
+    }
+    100% {
+        transform: translateY(120vh) rotate(360deg);
+    }
 }
 
 /* Responsive adjustments for smaller screens */

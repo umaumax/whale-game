@@ -37,10 +37,33 @@ let comboCount = 0;
 let lastMergeTime = 0;
 let isPaused = false;
 let isGameStarted = false;
+let bubbleInterval = null;
+let fruitInterval = null;
+const WALL_OFFSET = 14; // 見た目の枠線の太さ（物理判定のオフセット）
 
 // --- Initialization ---
 async function init() {
     gameContainer = document.getElementById('game-container');
+
+    // 魚テーマの色設定を「出世魚」に合わせて更新（淡い水色 -> 深海 -> 金）
+    if (THEMES.fish) {
+        const shusseuoColors = [
+            "#E1F5FE", // Lv1: 卵/稚魚
+            "#B3E5FC", // Lv2
+            "#81D4FA", // Lv3
+            "#4FC3F7", // Lv4
+            "#29B6F6", // Lv5
+            "#039BE5", // Lv6
+            "#0288D1", // Lv7
+            "#0277BD", // Lv8
+            "#01579B", // Lv9: 深海魚
+            "#304FFE", // Lv10: ヌシ手前
+            "#FFD700"  // Lv11: ヌシ（金）
+        ];
+        THEMES.fish.forEach((fish, index) => {
+            if (shusseuoColors[index]) fish.color = shusseuoColors[index];
+        });
+    }
 
     // Update Best Score UI
     document.getElementById('best-score').innerText = bestScore;
@@ -50,6 +73,9 @@ async function init() {
 
     // デバッグ設定の読み込み
     loadDebugSettings();
+
+    // 背景テーマの適用
+    updateThemeBackground(currentThemeName);
 
     // セーブデータの存在確認
     // 画像読み込み前にスプラッシュを隠すことで、リロード時のチラつきを防ぐ
@@ -88,20 +114,23 @@ async function init() {
             width: GAME_WIDTH,
             height: GAME_HEIGHT,
             wireframes: false,
-            background: '#222'
+            background: 'transparent' // CSSで背景を設定するため透明にする
         }
     });
 
     // Create Walls (U-shape)
     const wallOptions = {
         isStatic: true,
-        render: { fillStyle: '#555' },
+        render: { visible: false }, // 物理壁は非表示にして、renderWallsで描画する
         label: 'wall',
         restitution: 0.0
     };
-    const ground = Bodies.rectangle(GAME_WIDTH / 2, GAME_HEIGHT + WALL_THICKNESS / 2 - 10, GAME_WIDTH, WALL_THICKNESS, wallOptions);
-    const leftWall = Bodies.rectangle(0 - WALL_THICKNESS / 2, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, wallOptions);
-    const rightWall = Bodies.rectangle(GAME_WIDTH + WALL_THICKNESS / 2, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, wallOptions);
+    // 床: 上面が GAME_HEIGHT - WALL_OFFSET になるように配置
+    const ground = Bodies.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - WALL_OFFSET + WALL_THICKNESS / 2, GAME_WIDTH, WALL_THICKNESS, wallOptions);
+    // 左壁: 右側面が WALL_OFFSET になるように配置
+    const leftWall = Bodies.rectangle(WALL_OFFSET - WALL_THICKNESS / 2, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, wallOptions);
+    // 右壁: 左側面が GAME_WIDTH - WALL_OFFSET になるように配置
+    const rightWall = Bodies.rectangle(GAME_WIDTH - WALL_OFFSET + WALL_THICKNESS / 2, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, wallOptions);
 
     Composite.add(engine.world, [ground, leftWall, rightWall]);
     
@@ -142,6 +171,7 @@ async function init() {
     Events.on(render, 'afterRender', renderDeadline);
     Events.on(render, 'afterRender', renderConfetti); // 紙吹雪の描画
     Events.on(render, 'afterRender', renderGuideLine); // ガイドラインの描画
+    Events.on(render, 'afterRender', renderWalls); // 壁の描画
     Events.on(render, 'afterRender', renderDebugColliders); // デバッグ用コライダー描画
 
     // Start
@@ -284,8 +314,8 @@ function handleInputMove(e) {
     
     // Clamp x within walls
     const radius = currentFish.circleRadius;
-    if (x < radius) x = radius;
-    if (x > GAME_WIDTH - radius) x = GAME_WIDTH - radius;
+    if (x < radius + WALL_OFFSET) x = radius + WALL_OFFSET;
+    if (x > GAME_WIDTH - radius - WALL_OFFSET) x = GAME_WIDTH - radius - WALL_OFFSET;
 
     Body.setPosition(currentFish, { x: x, y: 50 });
 }
@@ -310,8 +340,8 @@ function handleInputDrop(e) {
             
             // Clamp x within walls
             const radius = currentFish.circleRadius;
-            if (x < radius) x = radius;
-            if (x > GAME_WIDTH - radius) x = GAME_WIDTH - radius;
+            if (x < radius + WALL_OFFSET) x = radius + WALL_OFFSET;
+            if (x > GAME_WIDTH - radius - WALL_OFFSET) x = GAME_WIDTH - radius - WALL_OFFSET;
 
             Body.setPosition(currentFish, { x: x, y: 50 });
         }
@@ -764,6 +794,50 @@ function renderGuideLine() {
     ctx.setLineDash([]);
 }
 
+// --- Wall Rendering ---
+function renderWalls() {
+    if (!render || !render.context) return;
+    const ctx = render.context;
+    
+    // デザイン設定
+    const thickness = WALL_OFFSET; // 太さ
+    let baseColor, glowColor;
+
+    // テーマに応じた色設定
+    if (currentThemeName === 'fruit') {
+        baseColor = 'rgba(255, 240, 200, 0.4)'; // 暖色系の半透明
+        glowColor = 'rgba(255, 160, 50, 0.8)';  // オレンジの光
+    } else {
+        // fish (default)
+        baseColor = 'rgba(200, 240, 255, 0.3)'; // 青系の半透明
+        glowColor = 'rgba(50, 200, 255, 0.8)';  // 水色の光
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    // U字型のパスを作成（上部は画面外からスタートして角を見せない）
+    ctx.moveTo(thickness / 2, -50); 
+    ctx.lineTo(thickness / 2, GAME_HEIGHT - thickness / 2); // 左下
+    ctx.lineTo(GAME_WIDTH - thickness / 2, GAME_HEIGHT - thickness / 2); // 右下
+    ctx.lineTo(GAME_WIDTH - thickness / 2, -50); // 右上
+
+    ctx.lineWidth = thickness;
+    ctx.strokeStyle = baseColor;
+    ctx.lineJoin = 'round'; // 角を丸くする
+    ctx.lineCap = 'round';
+    ctx.shadowBlur = 20; // 光彩の強さ
+    ctx.shadowColor = glowColor;
+    ctx.stroke();
+
+    // 内側のハイライト（ガラスの質感）
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.stroke();
+
+    ctx.restore();
+}
+
 // --- Debug Functions ---
 function setupDebugUI() {
     const panel = document.getElementById('debug-panel');
@@ -839,6 +913,7 @@ function setupDebugUI() {
     themeSelect.addEventListener('change', async (e) => {
         const newTheme = e.target.value;
         currentThemeName = newTheme;
+        updateThemeBackground(newTheme); // 背景を更新
         currentFishTypes = THEMES[newTheme];
         try {
             await preloadImages();
@@ -890,6 +965,109 @@ function updateCurrentFishIfIdle() {
             setNextFish(); // UI更新のみ
         }
     }
+}
+
+// テーマに応じた背景クラスを適用する関数
+function updateThemeBackground(theme) {
+    if (!gameContainer) return;
+    
+    // 既存のテーマクラスを削除
+    gameContainer.classList.remove('theme-fish', 'theme-fruit');
+    
+    // 新しいテーマクラスを追加
+    gameContainer.classList.add(`theme-${theme}`);
+
+    // 魚テーマの場合のみ泡アニメーションを開始
+    if (theme === 'fish') {
+        startBubbleAnimation();
+        stopFruitAnimation();
+    } else if (theme === 'fruit') {
+        stopBubbleAnimation();
+        startFruitAnimation();
+    } else {
+        stopBubbleAnimation();
+        stopFruitAnimation();
+    }
+}
+
+function startBubbleAnimation() {
+    if (bubbleInterval) return;
+    createBubble(); // 即座に1つ生成
+    // 1.5秒ごとに泡を生成
+    bubbleInterval = setInterval(createBubble, 1500);
+}
+
+function stopBubbleAnimation() {
+    if (bubbleInterval) {
+        clearInterval(bubbleInterval);
+        bubbleInterval = null;
+    }
+    // 既存の泡を削除
+    const bubbles = document.querySelectorAll('.bubble');
+    bubbles.forEach(b => b.remove());
+}
+
+function createBubble() {
+    if (!gameContainer || document.hidden) return;
+
+    const bubble = document.createElement('div');
+    bubble.classList.add('bubble');
+    
+    const size = Math.random() * 20 + 10; // 10px - 30px
+    bubble.style.width = `${size}px`;
+    bubble.style.height = `${size}px`;
+    bubble.style.left = `${Math.random() * 100}%`;
+    
+    const duration = Math.random() * 5 + 8; // 8s - 13s (ゆっくり昇る)
+    bubble.style.animationDuration = `${duration}s`;
+    
+    gameContainer.appendChild(bubble);
+    
+    // アニメーション終了後に削除
+    setTimeout(() => {
+        if (bubble.parentNode) bubble.remove();
+    }, duration * 1000);
+}
+
+function startFruitAnimation() {
+    if (fruitInterval) return;
+    createFruit(); // 即座に1つ生成
+    // 2秒ごとにフルーツを生成
+    fruitInterval = setInterval(createFruit, 2000);
+}
+
+function stopFruitAnimation() {
+    if (fruitInterval) {
+        clearInterval(fruitInterval);
+        fruitInterval = null;
+    }
+    // 既存のフルーツを削除
+    const fruits = document.querySelectorAll('.fruit-particle');
+    fruits.forEach(f => f.remove());
+}
+
+function createFruit() {
+    if (!gameContainer || document.hidden) return;
+
+    const fruit = document.createElement('div');
+    fruit.classList.add('fruit-particle');
+    
+    // ランダムなフルーツ絵文字
+    const fruits = ['🍎', '🍊', '🍇', '🍑', '🍒', '🍓', '🍍', '🍈'];
+    fruit.innerText = fruits[Math.floor(Math.random() * fruits.length)];
+    
+    const size = Math.random() * 20 + 20; // 20px - 40px
+    fruit.style.fontSize = `${size}px`;
+    fruit.style.left = `${Math.random() * 90 + 5}%`; // 画面端すぎないように
+    
+    const duration = Math.random() * 5 + 5; // 5s - 10s
+    fruit.style.animationDuration = `${duration}s`;
+    
+    gameContainer.appendChild(fruit);
+    
+    setTimeout(() => {
+        if (fruit.parentNode) fruit.remove();
+    }, duration * 1000);
 }
 
 // 盤面上の魚の見た目を現在のテーマに合わせて更新する
