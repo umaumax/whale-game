@@ -36,6 +36,7 @@ let showBallLabels = false;
 let comboCount = 0;
 let lastMergeTime = 0;
 let isPaused = false;
+let isGameStarted = false;
 
 // --- Initialization ---
 async function init() {
@@ -50,6 +51,14 @@ async function init() {
     // デバッグ設定の読み込み
     loadDebugSettings();
 
+    // セーブデータの存在確認
+    // 画像読み込み前にスプラッシュを隠すことで、リロード時のチラつきを防ぐ
+    const hasSaveData = localStorage.getItem('shusseuo_game_state') !== null;
+    if (hasSaveData) {
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'none';
+    }
+
     // 画像をプリロードしてスケールを計算
     await preloadImages();
 
@@ -61,6 +70,12 @@ async function init() {
 
     // ゲーム状態の復元を試みる
     const isRestored = loadGameState();
+
+    // もし復元に失敗した場合（データ破損など）はスプラッシュを再表示
+    if (hasSaveData && !isRestored) {
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'flex';
+    }
 
     // Setup Engine
     engine = Engine.create();
@@ -106,6 +121,13 @@ async function init() {
 
     // ページを離れるときに保存
     window.addEventListener('beforeunload', () => saveGameState());
+    window.addEventListener('pagehide', () => saveGameState());
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            saveGameState();
+        }
+    });
+    window.addEventListener('blur', () => saveGameState()); // フォーカスが外れた時も保存
 
     // Collision Handling (Merge)
     Events.on(engine, 'collisionStart', handleCollisions);
@@ -137,6 +159,11 @@ async function init() {
     if (startBtn) {
         startBtn.disabled = false;
         startBtn.innerText = "START";
+    }
+
+    // 復元に成功した場合はスプラッシュ画面をスキップして開始
+    if (isRestored) {
+        startGame();
     }
 }
 
@@ -244,7 +271,7 @@ function spawnCurrentFish() {
 }
 
 function handleInputMove(e) {
-    if (gameOver || isDropping || !currentFish || isPaused) return;
+    if (gameOver || isDropping || !currentFish || isPaused || !isGameStarted) return;
     e.preventDefault();
 
     const rect = render.canvas.getBoundingClientRect();
@@ -267,7 +294,7 @@ function handleInputDrop(e) {
     // UI要素（ボタン、入力、デバッグパネル等）への操作は無視する
     if (e.target.closest('button, input, select, label, #debug-panel, #debug-toggle-btn, #pause-btn')) return;
 
-    if (gameOver || isDropping || !currentFish || isPaused) return;
+    if (gameOver || isDropping || !currentFish || isPaused || !isGameStarted) return;
     e.preventDefault(); // Prevent double firing on some devices
 
     // タップ/クリックした位置にボールを移動させる
@@ -510,8 +537,11 @@ function resetGame() {
 window.resetGame = resetGame;
 
 function startGame() {
-    document.getElementById('splash-screen').style.display = 'none';
-    audioManager.resume();
+    isGameStarted = true;
+    const splash = document.getElementById('splash-screen');
+    if (splash) splash.style.display = 'none';
+    
+    if (audioManager) audioManager.resume();
     // ランナー開始
     Runner.run(runner, engine);
 }
@@ -536,6 +566,7 @@ window.togglePause = togglePause;
 
 function backToTitle() {
     // ゲームリセット（物理演算停止含む）
+    isGameStarted = false;
     resetGame();
     // ランナーを停止
     Runner.stop(runner);
@@ -940,6 +971,7 @@ function renderDebugColliders() {
 // --- Save/Load Game State ---
 function saveGameState() {
     if (gameOver) return;
+    if (!engine || !engine.world) return;
 
     const bodies = Composite.allBodies(engine.world);
     const fishes = [];
