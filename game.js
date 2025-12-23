@@ -131,6 +131,13 @@ async function init() {
     // Initial Fish
     setNextFish(isRestored); // 復元時はレベルを維持
     spawnCurrentFish();
+
+    // Enable Start Button when ready
+    const startBtn = document.getElementById('start-btn');
+    if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.innerText = "START";
+    }
 }
 
 // --- Game Logic ---

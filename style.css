@@ -232,6 +232,28 @@ button:active {
     transform: scale(0.95);
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
+button:disabled {
+    background: #999;
+    cursor: wait;
+    transform: none;
+    box-shadow: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+}
+button:disabled::after {
+    content: "";
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spinner 0.8s linear infinite;
+}
+@keyframes spinner {
+    to { transform: rotate(360deg); }
+}
 
 /* Debug UI Styles */
 #debug-panel {
